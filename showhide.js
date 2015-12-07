@@ -4,10 +4,10 @@
 // @description  Show/Hide cards in columns for Trello
 // @author       Alex Perez  
 // @match        https://trello.com/*
+// @grant unsafeWindow
 // ==/UserScript==
 'use strict';
 
-// TODO: cached queries, more MVC, more granular functions
 
 var State = {
     state: {},
