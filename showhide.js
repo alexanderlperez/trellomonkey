@@ -15,7 +15,6 @@ var State = {
     saveBoard: function (board, lists) {
         this.state[board] = {};
 
-
         forEach(lists, function (i, elList) {
             var list = elList.getAttribute('data-list');
             var isHidden = elList.getAttribute('data-ishidden');
@@ -76,15 +75,34 @@ var VM = {
         list.querySelector('.open-card-composer').classList.remove('hide');
     },
 
+    toggleList: function (list) {
+        if (list.querySelector('.list-cards').classList.contains('hide')
+            || list.querySelector('.open-card-composer').classList.contains('hide')) {
+            this.showList(list);
+        } else {
+            this.hideList(list);
+        }
+    },
+
     appendListShowHide: function (list) {
         var icon = document.createElement('span');
         icon.className = 'show-hide icon-sm icon-remove dark-hover';
 
         icon.addEventListener('click', function () {
-            this.hideList(list);
-        });
+            this.toggleList(list);
+        }.bind(this));
 
         list.querySelector('.list-header').appendChild(icon);
+    },
+
+    removeListShowHide: function (list) {
+        var icon = list.querySelector('.show-hide');
+        try {
+            icon.remove();
+        } catch (e) {
+            // happens on first-run
+            // console.log('No icon for', list);
+        }
     },
 
     applyListState: function (list, state) {
@@ -102,6 +120,7 @@ var VM = {
 
 /** Main Entry Point**/
 
+
 // run when the site is loaded and after each board change
 window.CHECKINTERVAL = setInterval(doIfListsExist, 500);
 document.addEventListener('click', function (e) {
@@ -114,51 +133,29 @@ function doIfListsExist() {
     var lists = document.querySelectorAll('.list');
     if (lists.length > 0) {
         clearInterval(window.CHECKINTERVAL);           
+
+        // testing
         testStateModel();
         testVM();
-        // digest();
+        // -
+
+        digest();
     }
 }
 
 function digest() {
-    cleanupShowHide();
-    // appendShowHide();
 
-    forEach(VM.lists, function (i, list) {
-        appendListShowHide(list);
+    // create the icons
+    forEach(VM.lists(), function (i, list) {
+        VM.removeListShowHide(list);
+        VM.appendListShowHide(list);
     })
-}
-/* ----- */
 
-function cleanupShowHide() {
-    var icons = document.querySelectorAll('.show-hide');
-
-    forEach(icons, function (i, elem) {
-        try {
-            elem.parentNode.removeChild(elem);
-        } catch (e) {
-            console.log(e, elem);
-        }
-    });
+    // state handling
 }
 
-function handleShowHide(evt) {
-    var hidings = getSiblings(evt.target.parentNode, function (elem) {
-        return elem.classList.contains('list-cards') || elem.classList.contains('open-card-composer');
-    });
 
-    forEach(hidings, function (i, elem) {
-        toggleShowHide(elem);
-    });
-}
-
-function toggleShowHide(elem) {
-    if (!elem.classList.contains('hide')) {
-        elem.classList.add('hide');
-    } else {
-        elem.classList.remove('hide');
-    }
-}
+/* -- Helpers -- */
 
 
 // from http://toddmotto.com/ditch-the-array-foreach-call-nodelist-hack/
@@ -187,9 +184,9 @@ function getSiblings(el, filter) {
 }
 
 
-
 /* --- Tests --- */
  
+
 function testStateModel() {
     console.group('Testing - State Model')
 
@@ -230,6 +227,7 @@ function testStateModel() {
         State.state = {};
         
         return true;
+
     }, "saveBoard isn't saving the board data correctly");
 
     assert("syncToLocalStorage", function () {
@@ -258,6 +256,7 @@ function testStateModel() {
         State.state = {};
 
         return true;
+
     }, "syncToLocalStorage not working")
 
     assert("syncFromLocalStorage", function () {
@@ -315,6 +314,7 @@ function testVM() {
         }
 
         return true;
+
     }, 
     "buildListMetadata isn't building metadata correctly") 
 
@@ -332,23 +332,75 @@ function testVM() {
         }
 
         return true;
+
     }, "getListMetadata isn't creating metadata object properly")
 
     assert("hideList", function () {
         var list = VM.lists()[0];
         VM.hideList(list);
 
-        return list.querySelector('.list-cards').classList.contains('hide')
-            && list.querySelector('.open-card-composer').classList.contains('hide');
+        if (!list.querySelector('.list-cards').classList.contains('hide')
+            || !list.querySelector('.open-card-composer').classList.contains('hide'))
+            return assert('', false, ".hide class not applied correctly");
+
+        // cleanup - show the list again
+        list.querySelector('.list-cards').classList.remove('hide');
+        list.querySelector('.open-card-composer').classList.remove('hide');
+
+        return true;
+
     }, "hideList isn't hiding lists correctly")
+
+    assert("toggleList", function () {
+        var list = VM.lists()[0];
+
+        // make sure it's visible
+        list.querySelector('.list-cards').classList.remove('hide');
+        list.querySelector('.open-card-composer').classList.remove('hide');
+
+        VM.toggleList(list);
+
+        if (!list.querySelector('.list-cards').classList.contains('hide')
+            || !list.querySelector('.open-card-composer').classList.contains('hide'))
+            return assert('', false, ".hide class not applied correctly");
+
+        VM.toggleList(list);
+
+        if (list.querySelector('.list-cards').classList.contains('hide')
+            || list.querySelector('.open-card-composer').classList.contains('hide'))
+            return assert('', false, ".hide class not removed correctly");
+
+        return true;
+
+    }, "toggleList doesn't toggle show/hide correctly");
 
     assert("appendListShowHide", function () {
         var list = VM.lists()[0];
 
         VM.appendListShowHide(list);
 
-        return list.querySelector('.show-hide');
+        if (!list.querySelector('.show-hide'))
+            return assert('', false, "icons aren't appearing");
+
+        // cleanup - remove the icons
+        list.querySelector('.show-hide').remove();
+
+        return true;
+
     }, "appendListShowHide isn't creating the icons correctly")
+
+    assert("removeShowHide", function () {
+        var list = VM.lists()[0];
+
+        VM.appendListShowHide(list);
+        VM.removeListShowHide(list);
+
+        if (list.querySelector('.show-hide')) 
+            return assert('', false, "show/hide icon still visible");
+
+        return true;
+
+    }, "removeShowHide doesn't get rid of the show/hide icons");
 
     assert("applyListState", function () {
         var curBoard = window.location.href.split('/').filter(function (s, i, a) { return i == a.length-1; });
@@ -364,13 +416,24 @@ function testVM() {
         
         VM.applyListState(list, state);
 
-        return list.querySelector('.list-cards').classList.contains('hide')
-            && list.querySelector('.open-card-composer').classList.contains('hide');
+        if (!list.querySelector('.list-cards').classList.contains('hide')
+            || !list.querySelector('.open-card-composer').classList.contains('hide'))
+            return assert('', false, "list state isn't being applied and hiding the list");
+
+        // cleanup - show the list again
+        list.querySelector('.list-cards').classList.remove('hide');
+        list.querySelector('.open-card-composer').classList.remove('hide');
+
+        return true;
+
     }, "applyListState isn't working correctly")
 
     console.groupEnd();
 }
 
+
+/* -- Assertion Functions-- */
+// TODO: make this into a standalone lib with grouping method that uses console.group
 
 function assert(message, assertion, error) {
     var res = undefined;
