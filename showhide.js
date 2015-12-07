@@ -5,15 +5,14 @@
 // @author       Alex Perez  
 // @match        https://trello.com/*
 // ==/UserScript==
-/* jshint -W097 */
 'use strict';
 
 // TODO: cached queries, more MVC, more granular functions
 
 var State = {
     state: {},
-    saveState: function (board, lists) {
-        var board = lists[0].getAttribute('data-board');
+
+    saveBoard: function (board, lists) {
         this.state[board] = {};
 
         forEach(lists, function (i, elList) {
@@ -24,14 +23,69 @@ var State = {
                 isHidden: isHidden,
             };
         });
+    },
 
-        localStorage.setItem('savedata', JSON.stringify(this.state));
+    syncFromLocalStorage: function () {
+        this.state = localStorage.getItem('saveData');
     },
-    getState: function (board) {
-        this.state = localStorage.getItem('savedata');
-        return this.state;
+
+    syncToLocalStorage: function () {
+        localStorage.setItem('saveData', JSON.stringify(this.state));
     },
-}
+};
+
+var VM = {
+    lists: function () {
+        return document.querySelectorAll('.list');
+    },
+
+    buildListMetadata: function (list) {
+        var listName = list.querySelector('.list-header-name').textContent;
+        var board = window.location.href.split('/').filter(function (s, i, a) { return i == a.length-1; });
+        var isHidden = list.querySelector('.list-cards').classList.contains('hide');
+
+        list.setAttribute('data-list', list);
+        list.setAttribute('data-board', board);
+        list.setAttribute('data-ishidden', isHidden);
+    },
+
+    getListMetadata: function (list) {
+        return {
+            list: list.getAttribute('data-list'),
+            board: list.getAttribute('data-board'),
+            isHidden: list.getAttribute('data-ishidden'),
+        };
+    },
+
+    applyListState: function (list, state) {
+        // get state of board
+        var data = this.getListMetadata(list);
+        var listState = state[data.board][data.list];
+
+        // hide list if isHidden
+        if (data.isHidden) {
+            this.hideList(list);
+        }
+    },
+
+    hideList: function (list) {
+        list.querySelector('.list-cards').classList.add('hide');
+        list.querySelector('.open-card-composer').classList.add('hide');
+    }, 
+
+    appendListShowHide: function (list) {
+        var icon = document.createElement('span');
+        icon.className = 'show-hide icon-sm icon-remove dark-hover';
+
+        icon.addEventListener('click', function () {
+            this.hideList(list);
+        });
+
+        list.querySelector('.list-header').appendChild(icon);
+    },
+};
+
+/** Main Entry Point**/
 
 // run when the site is loaded and after each board change
 window.CHECKINTERVAL = setInterval(doIfListsExist, 500);
@@ -41,17 +95,16 @@ document.addEventListener('click', function (e) {
     }
 });
 
-
 function doIfListsExist() {
     var lists = document.querySelectorAll('.list');
     if (lists.length > 0) {
         clearInterval(window.CHECKINTERVAL);           
         cleanupShowHide();
         appendShowHide();
-        // applyMetaData();
-        // applySavedState();
     }
 }
+
+/* ----- */
 
 
 function appendShowHide() {
@@ -64,6 +117,7 @@ function appendShowHide() {
         col.appendChild(icon);
     });
 }
+
 
 function cleanupShowHide() {
     var icons = document.querySelectorAll('.show-hide');
@@ -85,25 +139,33 @@ function handleShowHide(evt) {
     forEach(hidings, function (i, elem) {
         toggleShowHide(elem);
     });
-
-    applyMetaData();
-    saveState();
 }
 
 function toggleShowHide(elem) {
-        if (!elem.classList.contains('hide')) {
-            elem.classList.add('hide');
-        } else {
-            elem.classList.remove('hide');
-        }
+    if (!elem.classList.contains('hide')) {
+        elem.classList.add('hide');
+    } else {
+        elem.classList.remove('hide');
+    }
 }
 
+
 // from http://toddmotto.com/ditch-the-array-foreach-call-nodelist-hack/
-var forEach = function (array, callback, scope) {
+function forEach(array, callback, scope) {
     for (var i = 0; i < array.length; i++) {
         callback.call(scope, i, array[i]); 
     }
-};
+}
+
+function map(array, callback, scope) {
+    var arr = [];
+
+    for (var i = 0; i < array.length; i++) {
+        arr.push(callback.call(scope, i, array[i])); 
+    }
+
+    return arr;
+}
 
 // from plainjs.com
 function getSiblings(el, filter) {
@@ -113,82 +175,3 @@ function getSiblings(el, filter) {
     return siblings;
 }
 
-function applyMetaData() {
-    var lists = document.querySelectorAll('.list');
-
-    // naive, recalcs metadata to all lists
-    forEach(lists, function (i, elList) {
-        var list = elList.querySelector('.list-header-name').textContent;
-        var board = window.location.href.split('/').filter(function (s, i, a) { return i == a.length-1; });
-        var isHidden = elList.querySelector('.list-cards').classList.contains('hide');
-
-        elList.setAttribute('data-list', list);
-        elList.setAttribute('data-board', board);
-        elList.setAttribute('data-ishidden', isHidden);
-    });
-}
-
-function saveState() {
-    var lists = document.querySelectorAll('.list');
-    var saveData = JSON.parse(localStorage.getItem('savedata'));
-
-    var board = lists[0].getAttribute('data-board');
-    saveData[board] = {};
-
-    forEach(lists, function (i, elList) {
-        var list = elList.getAttribute('data-list');
-        var isHidden = elList.getAttribute('data-ishidden');
-
-        saveData[board][list] = {
-            isHidden: isHidden,
-        };
-    });
-
-    localStorage.setItem('savedata', JSON.stringify(saveData));
-
-    console.log('showing object saveData in saveState', saveData);
-}
-
-function applySavedState() {
-    var lists = document.querySelectorAll('.list');
-
-    var saveData = JSON.parse(localStorage.getItem('savedata'));
-    // console.log('saveData', saveData);
-
-    if (!saveData) {
-        saveState();
-        saveData = JSON.parse(localStorage.getItem('savedata'));
-    }
-
-    // console.log('showing localstorage in applySavedState:', saveData);
-    // console.log(lists);
-
-    forEach(lists, function (i, elList) {
-        console.log('looping');
-        try {
-            var board = elList.getAttribute('data-board');
-            var list = elList.getAttribute('data-list');
-            console.log(elList, board, list);
-            var isHidden = saveData[board][list].isHidden;
-        } catch (e) {
-            console.log(e, board, list, isHidden);
-        }
-
-        elList.setAttribute('data-ishidden', isHidden);
-
-        if (isHidden) {
-            var hidings = getSiblings(elList.querySelector('.show-hide').parentNode, function (elem) {
-                console.log('showing elem', elem);
-                return elem.classList.contains('list-cards') || elem.classList.contains('open-card-composer');
-            });
-
-            forEach(hidings, function (i, elem) {
-                console.log('hiding', elem);
-                elem.classList.add('hide');
-            });
-
-            applyMetaData();
-            saveState();
-        }
-    });
-}
