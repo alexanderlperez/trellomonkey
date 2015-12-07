@@ -6,6 +6,7 @@
 // @match        https://trello.com/*
 // ==/UserScript==
 'use strict';
+console.log('loaded cleancards');
 var style = document.createElement('style');
 style.setAttribute('type', 'text/css');
 style.appendChild(document.createTextNode('.phenom-other { display: none; }'));
