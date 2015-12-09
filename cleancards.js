@@ -6,7 +6,9 @@
 // @match        https://trello.com/*
 // ==/UserScript==
 'use strict';
-console.log('loaded cleancards');
+
+// TODO: make a way to add user-specified elements to hide, point-and-click
+
 var style = document.createElement('style');
 style.setAttribute('type', 'text/css');
 style.appendChild(document.createTextNode('.phenom-other { display: none; }'));
