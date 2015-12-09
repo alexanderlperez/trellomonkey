@@ -23,7 +23,7 @@ var State = {
         };
     },
 
-    saveBoard: function (board, lists) {
+    saveBoardState: function (board, lists) {
         var state = this.state;
 
         forEach(lists, function (i, elList) {
@@ -123,11 +123,10 @@ var VM = {
         var icon = list.querySelector('.show-hide');
         try {
             icon.remove();
-        } catch (e) { /* optimal solution, no need to complicate */}
+        } catch (e) { /* for initial load, optimal solution */}
     },
 
     applyListState: function (list, state) {
-        // hide list if isHidden
         if (state) {
             this.hideList(list);
         } else {
@@ -140,35 +139,26 @@ var VM = {
 /** Main Entry Point**/
 
 
-// run when the site is loaded, after each board change
+// run when the site is loaded
 window.CHECKINTERVAL = setInterval(doIfListsExist, 500);
 
-// check for clicks on generated menu items (may not exist yet)
+// run when changing boards: check for clicks on generated menu items (may not exist yet)
 document.addEventListener('click', function (e) {
     if (e.target.className.indexOf('tile-link') > -1) {
-
-        console.log('moving to', e.target.textContent, State.state);
-
-        State.saveBoard(VM.lists()[0].getAttribute('data-board'), VM.lists());
-
-        console.log('syncTo:', State.syncToLocalStorage());
+        State.saveBoardState(VM.lists()[0].getAttribute('data-board'), VM.lists());
+        State.syncToLocalStorage();
 
         window.CHECKINTERVAL = setInterval(doIfListsExist, 500);
     }
 });
 
-// have this match the beginning of the click handler
-// window.unload = function () {
-    // State.saveBoard(VM.lists()[0].getAttribute('data-board'), VM.lists());
-    // State.syncToLocalStorage();
-// }
 
 function doIfListsExist() {
     var lists = document.querySelectorAll('.list');
     if (lists.length > 0) {
         clearInterval(window.CHECKINTERVAL);           
 
-        if (window.DEBUG) {
+        if (localStorage.getItem('DEBUG') == 'true') {
             testStateModel();
             testVM();
             testSavingLoading();
@@ -176,21 +166,12 @@ function doIfListsExist() {
         }
 
         // get saved state
-        console.log('syncFrom:', State.syncFromLocalStorage(), State.state);
+        State.syncFromLocalStorage();
 
         // create an entry for this board if one doesn't exist
-
-        console.log(State.State, State.state[VM.currentBoard()]);
         if (!State.state[VM.currentBoard()]) {
-            console.log('creating new board entry');
             State.state[VM.currentBoard()] = {};
-            console.log('State.state[VM.currentBoard()]', State.state[VM.currentBoard()]);
         }
-
-
-        console.log('------- Syncing with %s -------', VM.currentBoard());
-        console.log('Synced, current state:', State.state);
-
 
         // Lists: apply state, create the icons and events
         forEach(VM.lists(), function (i, list) {
@@ -198,9 +179,6 @@ function doIfListsExist() {
 
             if (!State.state[VM.currentBoard()][listData.list]) {
                 State.state[VM.currentBoard()][listData.list] = {};
-            }
-
-            if (State.state[VM.currentBoard()][listData.list].ishidden == undefined) {
                 State.state[VM.currentBoard()][listData.list].ishidden = false;
             }
 
@@ -214,7 +192,6 @@ function doIfListsExist() {
                 VM.toggleList(list);
                 var listData = VM.buildListMetadata(list);
                 State.saveListState(list);
-                console.log(State.state[VM.currentBoard()], State.state[VM.currentBoard()][listData.list]);
             });
         });
     }
@@ -272,6 +249,8 @@ function testStateModel() {
         list.setAttribute('data-board', board);
         list.setAttribute('data-ishidden', isHidden);
 
+        State.state[board] = {};
+
         // test our method with the list we set up
         State.saveListState(list);
 
@@ -293,7 +272,7 @@ function testStateModel() {
 
     }, "list isn't being saved correctly");
 
-    assert("saveBoard", function () {
+    assert("saveBoardState", function () {
         var board = window.location.href.split('/').filter(function (s, i, a) { return i == a.length-1; })[0];
         var lists = document.querySelectorAll('.list');
 
@@ -301,7 +280,9 @@ function testStateModel() {
             VM.buildListMetadata(list);
         });
 
-        State.saveBoard(board, lists);
+        State.state[board] = {};
+
+        State.saveBoardState(board, lists);
         var boardState = State.state[board];
 
         if (!boardState) 
@@ -331,7 +312,7 @@ function testStateModel() {
 
         return true;
 
-    }, "saveBoard isn't saving the board data correctly");
+    }, "saveBoardState isn't saving the board data correctly");
 
     assert("syncToLocalStorage", function () {
         var board = window.location.href.split('/').filter(function (s, i, a) { return i == a.length-1; })[0];
@@ -341,7 +322,9 @@ function testStateModel() {
             VM.buildListMetadata(list);
         });
 
-        State.saveBoard(board, lists);
+        State.state[board] = {};
+
+        State.saveBoardState(board, lists);
         State.syncToLocalStorage();
 
         var lsState = localStorage.getItem('savedata');
@@ -370,7 +353,9 @@ function testStateModel() {
             VM.buildListMetadata(list);
         });
 
-        State.saveBoard(board, lists);
+        State.state[board] = {};
+
+        State.saveBoardState(board, lists);
         State.syncToLocalStorage();
 
         var state = JSON.stringify(State.state);
@@ -536,7 +521,7 @@ function testSavingLoading() {
 
 
 
-    console.end();
+    console.groupEnd();
 }
 
 /* -- Assertion Functions-- */
