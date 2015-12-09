@@ -8,15 +8,16 @@
 // ==/UserScript==
 'use strict';
 
+// TODO: change from overkill state model to simple localStorage key/value access
 
 var State = {
     state: {},
 
     saveListState: function (list) {
+        var state = this.state;
         var listName = list.getAttribute('data-list');
         var isHidden = list.getAttribute('data-ishidden') == "true";
         var board = list.getAttribute('data-board');
-        var state = this.state;
 
         state[board][listName] = {
             ishidden: isHidden,
@@ -26,14 +27,22 @@ var State = {
     saveBoardState: function (board, lists) {
         var state = this.state;
 
+        LOG && console.log('--- saveBoardState ---');
+
         forEach(lists, function (i, elList) {
             var list = elList.getAttribute('data-list');
             var isHidden = elList.getAttribute('data-ishidden') == "true";
+
+            LOG && console.log(board, list, isHidden);
 
             state[board][list] = {
                 ishidden: isHidden,
             };
         });
+
+        if (LOG) var boardLists = Object.keys(State.state[VM.currentBoard()]);
+        LOG && console.log('lists', lists);
+        LOG && console.table([ boardLists, boardLists.map(function (e, i, a) { return State.state[VM.currentBoard()][e].ishidden })]);
     },
 
     syncFromLocalStorage: function () {
@@ -138,17 +147,32 @@ var VM = {
 
 /** Main Entry Point**/
 
+var DEBUG = localStorage.getItem('DEBUG') == 'true';
+var LOG = localStorage.getItem('LOG') == 'true';
 
 // run when the site is loaded
 window.CHECKINTERVAL = setInterval(doIfListsExist, 500);
 
 // run when changing boards: check for clicks on generated menu items (may not exist yet)
+var resumeOrigClick = false;
 document.addEventListener('click', function (e) {
+    if (resumeOrigClick) {
+        resumeOrigClick = false;
+        return;
+    }
+
     if (e.target.className.indexOf('tile-link') > -1) {
-        State.saveBoardState(VM.lists()[0].getAttribute('data-board'), VM.lists());
+        // make sure we've done all our syncing before Trello takes over
+        e.preventDefault();
+
+        State.saveBoardState(VM.currentBoard(), VM.lists());
         State.syncToLocalStorage();
 
+        resumeOrigClick = true;
+        e.target.click();
+
         window.CHECKINTERVAL = setInterval(doIfListsExist, 500);
+
     }
 });
 
@@ -158,7 +182,7 @@ function doIfListsExist() {
     if (lists.length > 0) {
         clearInterval(window.CHECKINTERVAL);           
 
-        if (localStorage.getItem('DEBUG') == 'true') {
+        if (DEBUG) {
             testStateModel();
             testVM();
             testSavingLoading();
@@ -166,11 +190,12 @@ function doIfListsExist() {
         }
 
         // get saved state
-        State.syncFromLocalStorage();
+        var ls = State.syncFromLocalStorage();
 
         // create an entry for this board if one doesn't exist
         if (!State.state[VM.currentBoard()]) {
             State.state[VM.currentBoard()] = {};
+            LOG && console.log('State.state[VM.currentBoard()]', State.state[VM.currentBoard()]);
         }
 
         // Lists: apply state, create the icons and events
@@ -184,16 +209,27 @@ function doIfListsExist() {
 
             VM.applyListState(list, State.state[VM.currentBoard()][listData.list].ishidden);
  
-            // prevent duplicate icons if reloading same board
+            // always start fresh
             VM.removeListShowHide(list);
 
             // create the icons and set the click handler
             VM.appendListShowHideAndHandler(list, function () {
                 VM.toggleList(list);
                 var listData = VM.buildListMetadata(list);
-                State.saveListState(list);
+
+                LOG && console.log('--- Clicked', listData.list, '---');
+                LOG && console.log('Current metadata:');
+                LOG && console.table([Object.keys(listData), Object.keys(listData).map(function (e,i,a) {
+                    return listData[e];
+                })]);
             });
         });
+
+        if (LOG) var boardLists = Object.keys(State.state[VM.currentBoard()]);
+        LOG && console.log('--- Moving to', VM.currentBoard(),' ---');
+        LOG && console.log('List states:');
+        LOG && console.table([ boardLists, boardLists.map(function (e, i, a) { return State.state[VM.currentBoard()][e].ishidden })]);
+        LOG && console.log('localStorage state', ls);
     }
 }
 
